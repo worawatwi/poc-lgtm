@@ -1,0 +1,73 @@
+serviceAccount:
+  annotations:
+    iam.gke.io/gcp-service-account: grafana-loki@tdnest-ops.iam.gserviceaccount.com
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: gcs
+    bucketNames:
+      chunks: td-poc-loki-chunks
+      ruler: td-poc-loki-ruler
+    gcs:
+      chunkBufferSize: 0
+      enableHttp2: true
+      requestTimeout: 0s
+  schemaConfig:
+    configs:
+      - from: 2024-04-01
+        store: tsdb
+        object_store: gcs
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  ingester:
+    chunk_encoding: snappy
+    autoforget_unhealthy: true
+  tracing:
+    enabled: true
+  querier:
+    max_concurrent: 4
+
+deploymentMode: Distributed
+
+minio:
+  enabled: false
+
+ingester:
+  replicas: 1
+  zoneAwareReplication:
+    enabled: false
+querier:
+  replicas: 1
+  maxUnavailable: 1
+queryFrontend:
+  replicas: 1
+  maxUnavailable: 1
+queryScheduler:
+  replicas: 1
+distributor:
+  replicas: 1
+  maxUnavailable: 1
+compactor:
+  replicas: 1
+indexGateway:
+  replicas: 1
+  maxUnavailable: 1
+
+bloomCompactor:
+  replicas: 0
+bloomGateway:
+  replicas: 0
+
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+
+singleBinary:
+  replicas: 0

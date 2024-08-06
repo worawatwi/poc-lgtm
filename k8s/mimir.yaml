@@ -1,0 +1,27 @@
+serviceAccount:
+  annotations:
+    iam.gke.io/gcp-service-account: grafana-mimir@tdnest-ops.iam.gserviceaccount.com
+minio:
+  enabled: false
+mimir:
+  structuredConfig:
+    common:
+      storage:
+        backend: gcs
+    blocks_storage:
+      backend: gcs
+      gcs:
+        bucket_name: td-poc-mimir-blocks
+    alertmanager_storage:
+      backend: gcs
+      gcs:
+        bucket_name: td-poc-mimir-alertmanager
+    ruler_storage:
+      backend: gcs
+      gcs:
+        bucket_name: td-poc-mimir-ruler
+    frontend:
+      query_result_response_format: protobuf
+    limits:
+      max_global_exemplars_per_user: 100000
+      native_histograms_ingestion_enabled: true

@@ -1,0 +1,82 @@
+deploymentStrategy: { "type": "Recreate" }
+adminUser: admin
+adminPassword: TookDee@88
+sidecar:
+  dashboards:
+    enabled: true
+    searchNamespace: ALL
+    folderAnnotation: grafana_folder
+    provider:
+      foldersFromFilesStructure: true
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        url: http://mimir-nginx.mimir/prometheus
+        access: proxy
+        isDefault: true
+        editable: true
+        jsonData:
+          exemplarTraceIdDestinations:
+            - datasourceUid: tempo
+              name: trace_id
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        url: http://tempo-gateway.tempo
+        access: proxy
+        isDefault: false
+        jsonData:
+          serviceMap:
+            datasourceUid: 'prometheus'
+          nodeGraph:
+            enabled: true
+          traceQuery:
+            timeShiftEnabled: true
+          tracesToLogsV2:
+            datasourceUid: 'loki'
+            spanStartTimeShift: '-5m'
+            spanEndTimeShift: '5m'
+            tags:
+              - key: k8s.namespace.name
+                value: k8s_namespace_name
+              - key: k8s.pod.name
+                value: k8s_pod_name
+              - key: k8s.container.name
+                value: k8s_container_name
+            filterByTraceID: false
+            filterBySpanID: false
+            customQuery: true
+            query: '{$${__tags}} | trace_id="$${__trace.traceId}" | span_id="$${__span.spanId}"'
+          tracesToMetrics:
+            datasourceUid: 'prometheus'
+            spanStartTimeShift: '-1h'
+            spanEndTimeShift: '1h'
+            tags: [{ key: 'service.name', value: 'service_name' }, { key: 'http.route', value: 'uri' }]
+            queries:
+              - name: 'Request rate'
+                query: 'rate(http_server_requests_count{$$__tags}[5m])'
+              - name: 'Error rate'
+                query: 'rate(http_server_requests_count{$$__tags, status=~"5.*"}[5m])'
+              - name: 'P95 Duration'
+                query: 'histogram_quantile(0.95,sum(rate(http_server_requests_bucket{$$__tags}[5m])) by(le))'
+      - name: Loki
+        uid: loki
+        type: loki
+        url: http://loki-gateway.loki
+        access: proxy
+        jsonData:
+          timeout: 60
+          maxLines: 1000
+          derivedFields:
+            - datasourceUid: tempo
+              matcherRegex: "trace_id"
+              matcherType: "label"
+              name: trace_id
+              url: '$${__value.raw}'
+              urlDisplayLabel: 'View Trace'
+persistence:
+  enabled: true

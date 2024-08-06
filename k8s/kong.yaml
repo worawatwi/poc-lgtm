@@ -1,0 +1,16 @@
+gateway:
+  env:
+    tracing_instrumentations: request,balancer
+    tracing_sampling_rate: 1.0
+  autoscaling:
+    enabled: false
+  proxy:
+    type: ClusterIP
+  manager:
+    enabled: false
+  resources:
+    requests:
+      cpu: 10m
+      memory: 379Mi
+    limits:
+      memory: 768Mi

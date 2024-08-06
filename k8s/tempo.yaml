@@ -1,0 +1,49 @@
+---
+serviceAccount:
+  annotations:
+    iam.gke.io/gcp-service-account: grafana-tempo@tdnest-ops.iam.gserviceaccount.com
+gateway:
+  enabled: true
+storage:
+  trace:
+    backend: gcs
+    gcs:
+      bucket_name: td-poc-tempo-traces
+minio:
+  enabled: false
+traces:
+  otlp:
+    grpc:
+      enabled: true
+    http:
+      enabled: true
+  zipkin:
+    enabled: false
+  jaeger:
+    thriftHttp:
+      enabled: false
+  opencensus:
+    enabled: false
+global_overrides:
+  metrics_generator_processors: 
+    - service-graphs
+    - span-metrics
+metricsGenerator:
+  enabled: true
+  config:
+    processor:
+      service_graphs:
+        dimensions:
+          - service.name
+          - k8s.namespace.name
+          - k8s.pod.name
+      span_metrics:
+        dimensions:
+          - service.name
+          - k8s.namespace.name
+          - k8s.pod.name
+    storage:
+      remote_write_add_org_id_header: false
+      remote_write:
+        - url: "http://mimir-nginx.mimir/api/v1/push"
+          send_exemplars: true

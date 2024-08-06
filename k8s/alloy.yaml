@@ -1,0 +1,205 @@
+alloy:
+  extraPorts:
+    - name: "otel-grpc"
+      port: 4317
+      targetPort: 4317
+      protocol: "TCP"
+    - name: "otel-http"
+      port: 4318
+      targetPort: 4318
+      protocol: "TCP"
+  configMap:
+    content: |-
+      logging {
+        level  = "info"
+      }
+
+      // Prometheus
+
+      prometheus.remote_write "default" {
+        endpoint {
+          url = "http://mimir-nginx.mimir/api/v1/push"
+          send_exemplars = true
+        }
+      }
+
+      discovery.kubernetes "systems" {
+        role = "pod"
+        namespaces {
+          own_namespace = true
+          names         = ["gateway", "cert-manager", "tempo", "mimir"]
+        }
+      }
+
+      // discovery.kubernetes "apps" {
+      //   role = "pod"
+      //   namespaces {
+      //     own_namespace = false
+      //     names         = ["dev"]
+      //   }
+      // }
+
+      prometheus.scrape "systems" {
+        targets    = discovery.kubernetes.systems.targets
+        forward_to = [prometheus.remote_write.default.receiver]
+      }
+
+      //prometheus.scrape "apps" {
+      //  targets    = discovery.kubernetes.apps.targets
+      //  scrape_protocols = ["OpenMetricsText1.0.0"]
+      //  metrics_path = "/actuator/prometheus"
+      //  forward_to = [prometheus.remote_write.default.receiver]
+      //}
+
+      // Loki
+
+      loki.write "default" {
+        endpoint {
+          url = "http://loki-gateway.loki/loki/api/v1/push"
+        }
+      }
+
+      discovery.relabel "pod_logs" {
+        targets = discovery.kubernetes.systems.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          action = "replace"
+          target_label = "namespace"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          action = "replace"
+          target_label = "pod"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          action = "replace"
+          target_label = "container"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+          action = "replace"
+          target_label = "app"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_container_name"]
+          action = "replace"
+          target_label = "job"
+          separator = "/"
+          replacement = "$1"
+        }
+      }
+
+      loki.source.kubernetes "pod_logs" {
+        targets    = discovery.relabel.pod_logs.output
+        forward_to = [loki.process.pod_logs.receiver]
+      }
+
+      loki.process "pod_logs" {
+        stage.static_labels {
+            values = {
+              cluster = "observerability",
+            }
+        }
+
+        forward_to = [loki.write.default.receiver]
+      }
+
+      // Opentelemetry
+
+      otelcol.exporter.prometheus "default" {
+        forward_to = [prometheus.remote_write.default.receiver]
+      }
+
+      otelcol.exporter.otlphttp "tempo" {
+        client {
+          endpoint = "http://tempo-gateway.tempo"
+        }
+      }
+
+      otelcol.exporter.otlphttp "loki" {
+        client {
+          endpoint = "http://loki-gateway.loki/otlp"
+        }
+      }
+
+      otelcol.exporter.otlphttp "mimir" {
+        client {
+          endpoint = "http://mimir-nginx.mimir/otlp"
+        }
+      }
+
+      otelcol.exporter.loki "default" {
+        forward_to = [loki.write.default.receiver]
+      }
+
+      otelcol.exporter.logging "default" {
+        verbosity           = "detailed"
+      }
+
+      otelcol.receiver.otlp "default" {
+        grpc {
+          endpoint = "0.0.0.0:4317"
+        }
+
+        http {
+          endpoint = "0.0.0.0:4318"
+        }
+
+        output {
+          metrics = [otelcol.processor.transform.label.input]
+          logs    = [otelcol.processor.batch.default.input]
+          traces  = [otelcol.processor.batch.default.input]
+        }
+      }
+
+      otelcol.processor.transform "label" {
+        error_mode = "ignore"
+
+        metric_statements {
+          context = "datapoint"
+
+          statements = [
+            `set(attributes["service_name"], resource.attributes["service.name"])`,
+            `set(attributes["namespace"], resource.attributes["k8s.namespace.name"])`,
+            `set(attributes["pod"], resource.attributes["k8s.pod.name"])`,
+          ]
+        }
+
+        output {
+          metrics = [otelcol.processor.batch.default.input]
+        }
+      }
+
+      otelcol.processor.tail_sampling "default" {
+          decision_wait = "10s"
+
+          policy {
+              name = "filter-by-route"
+              type = "string_attribute"
+              string_attribute {
+                key = "http.route"
+                values = ["/actuator/health", "/actuator/prometheus"]
+                enabled_regex_matching = true
+                invert_match = true
+              }
+          }
+
+          output {
+              traces = [otelcol.exporter.otlphttp.tempo.input]
+          }
+      }
+
+
+      otelcol.processor.batch "default" {
+        output {
+          metrics = [otelcol.exporter.otlphttp.mimir.input]
+          logs    = [otelcol.exporter.otlphttp.loki.input]
+          traces  = [otelcol.processor.tail_sampling.default.input]
+        }
+      }
