@@ -1,0 +1,58 @@
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: otlp
+  namespace: opentelemetry-system
+spec:
+  config:
+    extensions:
+      basicauth/server:
+        htpasswd: 
+          inline: |
+            client:TookDee@88
+
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+            auth:
+              authenticator: basicauth/server
+
+    processors:
+      batch: {}
+      tail_sampling:
+        policies:
+          - name: filter_by_route
+            type: string_attribute
+            string_attribute:
+              key: http.route
+              values: [ /actuator/health, /actuator/prometheus ]
+              enabled_regex_matching: true
+              invert_match: true
+
+    exporters:
+      otlphttp/tempo:
+        endpoint: http://tempo-gateway.tempo
+      otlphttp/loki:
+        endpoint: http://loki-gateway.loki/otlp
+      otlphttp/mimir:
+        endpoint: http://mimir-nginx.mimir/otlp
+
+    service:
+      extensions: [basicauth/server]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [tail_sampling, batch]
+          exporters: [otlphttp/tempo]
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlphttp/mimir]
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlphttp/loki]

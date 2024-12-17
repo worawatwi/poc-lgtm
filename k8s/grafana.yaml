@@ -8,6 +8,11 @@ sidecar:
     folderAnnotation: grafana_folder
     provider:
       foldersFromFilesStructure: true
+grafana.ini:
+  server:
+    domain: 34.54.58.166
+    root_url: "http://34.54.58.166/grafana"
+    serve_from_sub_path: true
 datasources:
   datasources.yaml:
     apiVersion: 1

@@ -5,7 +5,9 @@ metadata:
   namespace: dev
 spec:
   exporter:
-    endpoint: http://alloy.monitoring:4317
+    # endpoint: http://alloy.monitoring:4317
+    endpoint: http://otlp-collector.opentelemetry-system:4318
+    # endpoint: http://34.54.58.166/otlp
   propagators:
     - tracecontext
     - baggage
@@ -21,3 +23,7 @@ spec:
       value: "true"
     - name: OTEL_METRIC_EXPORT_INTERVAL
       value: "15000"
+    - name: OTEL_EXPORTER_OTLP_PROTOCOL
+      value: http/protobuf
+    - name: OTEL_EXPORTER_OTLP_HEADERS
+      value: Authorization=Basic Y2xpZW50OlRvb2tEZWVAODg=

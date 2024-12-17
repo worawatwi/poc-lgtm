@@ -23,5 +23,6 @@ mimir:
     frontend:
       query_result_response_format: protobuf
     limits:
+      out_of_order_time_window: 5m
       max_global_exemplars_per_user: 100000
       native_histograms_ingestion_enabled: true

@@ -6,6 +6,8 @@ gateway:
     enabled: false
   proxy:
     type: ClusterIP
+    annotations:
+      cloud.google.com/neg: '{"exposed_ports": {"80":{"name": "gke-tdnest-ops-kong"}}}'
   manager:
     enabled: false
   resources:
