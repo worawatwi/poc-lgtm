@@ -13,7 +13,7 @@ module "start_stop_scheduler" {
     {
       project = "tdnest-ops"
       resource_types = [
-        "gke",
+        "gke", "gce"
       ]
       start_job_name = "start-gke-nodepool"
       start_schedule = "30 8 * * 1-5"
@@ -23,6 +23,10 @@ module "start_stop_scheduler" {
   ]
 
   gke_function_config = {
+    enabled            = true
+    max_instance_count = 1
+  }
+  gce_function_config = {
     enabled            = true
     max_instance_count = 1
   }
